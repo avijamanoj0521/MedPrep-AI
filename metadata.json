@@ -1,0 +1,6 @@
+{
+  "name": "MedPrep AI",
+  "description": "Comprehensive college healthcare education platform for Medical, Nursing, and Pharmacy students.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
