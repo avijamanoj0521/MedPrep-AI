@@ -26,7 +26,6 @@ import com.example.ui.theme.MedNavyPrimary
 import com.example.ui.theme.MedTealAccent
 import com.example.ui.theme.MedTealPrimary
 import com.example.viewmodel.MedPrepViewModel
-import com.example.viewmodel.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,20 +35,25 @@ fun AuthScreen(
 ) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Login, 1: Register
 
-    // Login Form State
-    var loginEmail by remember { mutableStateOf("priya@medprep.edu") }
-    var loginPassword by remember { mutableStateOf("Medprep@123") }
+    // Login Form State (Fresh & Unpopulated)
+    var loginEmail by remember { mutableStateOf("") }
+    var loginPassword by remember { mutableStateOf("") }
     var showLoginPassword by remember { mutableStateOf(false) }
 
-    // Register Form State
+    // Register Form State (Personalized Academic Profile Collection)
     var regFullName by remember { mutableStateOf("") }
     var regEmail by remember { mutableStateOf("") }
     var regPassword by remember { mutableStateOf("") }
     var regConfirmPassword by remember { mutableStateOf("") }
-    var regCollege by remember { mutableStateOf("Government Medical College") }
+    var regCollege by remember { mutableStateOf("") }
+    var regUniversity by remember { mutableStateOf("State Health Sciences University") }
+    var regEducationLevel by remember { mutableStateOf("Undergraduate Healthcare") }
     var regCourseId by remember { mutableStateOf("bsc_nursing") }
+    var regAcademicYear by remember { mutableStateOf("1st Year") }
+    var regSemester by remember { mutableStateOf("Semester 1") }
+    var regLanguage by remember { mutableStateOf("English") }
     var showRegPassword by remember { mutableStateOf(false) }
-    var agreedToTerms by remember { mutableStateOf(true) }
+    var agreedToTerms by remember { mutableStateOf(false) }
 
     // Status state
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -62,25 +66,26 @@ fun AuthScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.colorScheme.background)
+                .testTag("auth_screen"),
             contentPadding = PaddingValues(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Branding Emblem
+            // Branding Header
             item {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Surface(
                     shape = CircleShape,
                     color = MedNavyPrimary,
-                    modifier = Modifier.size(72.dp)
+                    modifier = Modifier.size(68.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.LocalHospital,
                             contentDescription = "MedPrep Logo",
                             tint = MedTealAccent,
-                            modifier = Modifier.size(38.dp)
+                            modifier = Modifier.size(36.dp)
                         )
                     }
                 }
@@ -100,7 +105,7 @@ fun AuthScreen(
                 )
             }
 
-            // Auth Mode Selector
+            // Tab Selector: Student Login vs New Registration
             item {
                 PrimaryTabRow(
                     selectedTabIndex = selectedTab,
@@ -131,13 +136,13 @@ fun AuthScreen(
                 }
             }
 
-            // Error or Success Banner
+            // Error Feedback Banner
             errorMessage?.let { err ->
                 item {
                     Card(
                         shape = RoundedCornerShape(8.dp),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().testTag("auth_error_banner")
                     ) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = Color(0xFFC62828), modifier = Modifier.size(20.dp))
@@ -148,6 +153,7 @@ fun AuthScreen(
                 }
             }
 
+            // Success Feedback Banner
             successMessage?.let { msg ->
                 item {
                     Card(
@@ -165,14 +171,15 @@ fun AuthScreen(
             }
 
             if (selectedTab == 0) {
-                // LOGIN FORM
+                // ==================== LOGIN FORM ====================
                 item {
                     OutlinedTextField(
                         value = loginEmail,
                         onValueChange = { loginEmail = it },
-                        label = { Text("College Email Address") },
-                        placeholder = { Text("student@institution.edu") },
+                        label = { Text("Student / Institutional Email") },
+                        placeholder = { Text("your.email@medical.edu") },
                         leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("login_email_input")
                     )
                 }
@@ -192,6 +199,7 @@ fun AuthScreen(
                             }
                         },
                         visualTransformation = if (showLoginPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("login_password_input")
                     )
                 }
@@ -199,20 +207,14 @@ fun AuthScreen(
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(
-                            onClick = {
-                                loginEmail = "priya@medprep.edu"
-                                loginPassword = "Medprep@123"
-                            }
+                            onClick = { showForgotPasswordDialog = true },
+                            modifier = Modifier.testTag("forgot_password_button")
                         ) {
-                            Text("Use Demo Credentials", fontSize = 11.sp, color = MedTealPrimary)
-                        }
-
-                        TextButton(onClick = { showForgotPasswordDialog = true }) {
-                            Text("Forgot Password?", fontSize = 11.sp, color = MedNavyPrimary)
+                            Text("Forgot Password?", fontSize = 12.sp, color = MedNavyPrimary)
                         }
                     }
                 }
@@ -220,13 +222,19 @@ fun AuthScreen(
                 item {
                     Button(
                         onClick = {
-                            if (loginEmail.isBlank() || loginPassword.isBlank()) {
-                                errorMessage = "Please enter both your college email and password."
+                            val cleanEmail = loginEmail.trim()
+                            if (cleanEmail.isBlank() || loginPassword.isBlank()) {
+                                errorMessage = "Please enter your registered email address and password."
                                 return@Button
                             }
+                            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(cleanEmail).matches() && !cleanEmail.contains("@")) {
+                                errorMessage = "Please enter a valid email format."
+                                return@Button
+                            }
+
                             isLoading = true
                             errorMessage = null
-                            viewModel.loginStudent(loginEmail, loginPassword) { success, msg ->
+                            viewModel.loginStudent(cleanEmail, loginPassword) { success, msg ->
                                 isLoading = false
                                 if (success) {
                                     onAuthSuccess()
@@ -236,27 +244,39 @@ fun AuthScreen(
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MedNavyPrimary),
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(50.dp)
                             .testTag("submit_login_button")
                     ) {
                         if (isLoading) {
-                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         } else {
-                            Text("Sign In to MedPrep AI", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("Sign In to MedPrep AI", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
                     }
                 }
             } else {
-                // REGISTRATION FORM
+                // ==================== REGISTRATION FORM ====================
+                item {
+                    Text(
+                        text = "Create Your Personalized Academic Profile",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = MedNavyPrimary,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
                 item {
                     OutlinedTextField(
                         value = regFullName,
                         onValueChange = { regFullName = it },
-                        label = { Text("Full Legal Name") },
-                        placeholder = { Text("e.g. Dr. / Nurse / Student Name") },
+                        label = { Text("Full Name") },
+                        placeholder = { Text("Student Name") },
                         leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("reg_name_input")
                     )
                 }
@@ -265,9 +285,10 @@ fun AuthScreen(
                     OutlinedTextField(
                         value = regEmail,
                         onValueChange = { regEmail = it },
-                        label = { Text("College / Institutional Email") },
-                        placeholder = { Text("scholar@medical.edu") },
-                        leadingIcon = { Icon(Icons.Default.School, contentDescription = null) },
+                        label = { Text("Institutional / Personal Email") },
+                        placeholder = { Text("name@health.edu") },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("reg_email_input")
                     )
                 }
@@ -277,16 +298,59 @@ fun AuthScreen(
                         value = regCollege,
                         onValueChange = { regCollege = it },
                         label = { Text("College / Hospital Affiliation") },
-                        placeholder = { Text("e.g. Government Medical/Nursing College") },
-                        modifier = Modifier.fillMaxWidth()
+                        placeholder = { Text("e.g. Government Medical College") },
+                        leadingIcon = { Icon(Icons.Default.School, contentDescription = null) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("reg_college_input")
                     )
                 }
 
                 item {
                     OutlinedTextField(
+                        value = regUniversity,
+                        onValueChange = { regUniversity = it },
+                        label = { Text("University / Licensing Board / Examination") },
+                        placeholder = { Text("e.g. RGUHS, AIIMS, MUHS, NMC/INC") },
+                        leadingIcon = { Icon(Icons.Default.AccountBalance, contentDescription = null) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("reg_university_input")
+                    )
+                }
+
+                // Healthcare Program Dropdown / Selector
+                item {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text("Enrolled Healthcare Program", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MedNavyPrimary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        SeedData.supportedCourses.forEach { course ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { regCourseId = course.id }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = regCourseId == course.id,
+                                    onClick = { regCourseId = course.id }
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column {
+                                    Text(course.name, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(course.regulatoryBody, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Password fields
+                item {
+                    OutlinedTextField(
                         value = regPassword,
                         onValueChange = { regPassword = it },
-                        label = { Text("Create Secure Password") },
+                        label = { Text("Create Password (min 6 characters)") },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                         visualTransformation = if (showRegPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             IconButton(onClick = { showRegPassword = !showRegPassword }) {
@@ -296,6 +360,7 @@ fun AuthScreen(
                                 )
                             }
                         },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("reg_password_input")
                     )
                 }
@@ -305,8 +370,10 @@ fun AuthScreen(
                         value = regConfirmPassword,
                         onValueChange = { regConfirmPassword = it },
                         label = { Text("Confirm Password") },
+                        leadingIcon = { Icon(Icons.Default.LockReset, contentDescription = null) },
                         visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("reg_confirm_password_input")
                     )
                 }
 
@@ -317,11 +384,12 @@ fun AuthScreen(
                     ) {
                         Checkbox(
                             checked = agreedToTerms,
-                            onCheckedChange = { agreedToTerms = it }
+                            onCheckedChange = { agreedToTerms = it },
+                            modifier = Modifier.testTag("agree_terms_checkbox")
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "I confirm enrollment in a collegiate healthcare program and accept patient privacy standards.",
+                            text = "I confirm my enrollment in a healthcare curriculum and accept collegiate learning standards.",
                             fontSize = 11.sp,
                             lineHeight = 15.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -332,12 +400,13 @@ fun AuthScreen(
                 item {
                     Button(
                         onClick = {
-                            if (regFullName.isBlank() || regEmail.isBlank() || regPassword.isBlank()) {
-                                errorMessage = "All fields are required."
+                            val cleanEmail = regEmail.trim()
+                            if (regFullName.isBlank() || cleanEmail.isBlank() || regPassword.isBlank()) {
+                                errorMessage = "Please enter your name, email, and password."
                                 return@Button
                             }
                             if (regPassword.length < 6) {
-                                errorMessage = "Password must be at least 6 characters."
+                                errorMessage = "Password must be at least 6 characters long."
                                 return@Button
                             }
                             if (regPassword != regConfirmPassword) {
@@ -345,18 +414,23 @@ fun AuthScreen(
                                 return@Button
                             }
                             if (!agreedToTerms) {
-                                errorMessage = "Please accept the collegiate academic terms."
+                                errorMessage = "Please check the box to accept the academic terms."
                                 return@Button
                             }
 
                             isLoading = true
                             errorMessage = null
                             viewModel.registerStudent(
-                                email = regEmail,
+                                email = cleanEmail,
                                 password = regPassword,
                                 fullName = regFullName,
-                                collegeName = regCollege,
-                                courseId = regCourseId
+                                collegeName = if (regCollege.isBlank()) "Government Medical College" else regCollege,
+                                courseId = regCourseId,
+                                educationLevel = regEducationLevel,
+                                university = regUniversity,
+                                academicYear = regAcademicYear,
+                                semesterOrPhase = regSemester,
+                                preferredLanguage = regLanguage
                             ) { success, msg ->
                                 isLoading = false
                                 if (success) {
@@ -367,93 +441,97 @@ fun AuthScreen(
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MedNavyPrimary),
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(50.dp)
                             .testTag("submit_register_button")
                     ) {
                         if (isLoading) {
-                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         } else {
-                            Text("Register Student Account", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("Complete Registration & Enter", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
                     }
-                }
-            }
-
-            // Quick Guest Access
-            item {
-                Spacer(modifier = Modifier.height(10.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedButton(
-                    onClick = {
-                        viewModel.loginStudent("priya@medprep.edu", "Medprep@123") { _, _ ->
-                            onAuthSuccess()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().testTag("continue_as_guest_button")
-                ) {
-                    Icon(Icons.Default.Badge, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Continue As Enrolled Scholar (Direct Access)")
                 }
             }
         }
     }
 
+    // Forgot Password Dialog with Real Reset Functionality
     if (showForgotPasswordDialog) {
         var resetEmail by remember { mutableStateOf(loginEmail) }
-        var isResetSent by remember { mutableStateOf(false) }
+        var newPass by remember { mutableStateOf("") }
+        var resetStatus by remember { mutableStateOf<String?>(null) }
+        var isResetting by remember { mutableStateOf(false) }
 
         AlertDialog(
             onDismissRequest = { showForgotPasswordDialog = false },
             title = { Text("Reset Academic Password", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (!isResetSent) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Enter your registered student email and choose a new password.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = resetEmail,
+                        onValueChange = { resetEmail = it },
+                        label = { Text("Registered Email") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("reset_email_input")
+                    )
+                    OutlinedTextField(
+                        value = newPass,
+                        onValueChange = { newPass = it },
+                        label = { Text("New Password (min 6 chars)") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("reset_new_password_input")
+                    )
+
+                    resetStatus?.let { status ->
                         Text(
-                            text = "Enter your registered college email. We will send password recovery verification instructions.",
+                            text = status,
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        OutlinedTextField(
-                            value = resetEmail,
-                            onValueChange = { resetEmail = it },
-                            label = { Text("College Email") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        Text(
-                            text = "✅ Password reset instructions sent to $resetEmail. For demo accounts, password is 'Medprep@123'.",
-                            fontSize = 12.sp,
-                            color = Color(0xFF16A34A),
+                            color = if (status.startsWith("✅")) Color(0xFF16A34A) else Color(0xFFDC2626),
                             fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
             },
             confirmButton = {
-                if (!isResetSent) {
-                    Button(
-                        onClick = { isResetSent = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = MedNavyPrimary)
-                    ) {
-                        Text("Send Reset Link")
-                    }
-                } else {
-                    Button(
-                        onClick = { showForgotPasswordDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = MedNavyPrimary)
-                    ) {
-                        Text("Close")
+                Button(
+                    onClick = {
+                        val clean = resetEmail.trim()
+                        if (clean.isBlank() || newPass.length < 6) {
+                            resetStatus = "Please provide your email and a new password with 6+ characters."
+                            return@Button
+                        }
+                        isResetting = true
+                        viewModel.resetPassword(clean, newPass) { success, msg ->
+                            isResetting = false
+                            if (success) {
+                                resetStatus = "✅ Password successfully updated! You can now sign in."
+                            } else {
+                                resetStatus = msg ?: "Password reset failed."
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MedNavyPrimary),
+                    modifier = Modifier.testTag("confirm_reset_button")
+                ) {
+                    if (isResetting) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp))
+                    } else {
+                        Text("Update Password")
                     }
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showForgotPasswordDialog = false }) {
-                    Text("Cancel")
+                    Text("Close")
                 }
             }
         )

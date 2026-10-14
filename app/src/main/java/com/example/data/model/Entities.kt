@@ -8,17 +8,19 @@ data class UserProfileEntity(
     @PrimaryKey val id: String = "default_student",
     val fullName: String,
     val email: String,
+    val educationLevel: String = "Undergraduate Healthcare",
+    val university: String, // Board, University, or Licensing Examination
     val courseId: String,
     val courseName: String,
-    val university: String,
     val collegeName: String,
     val admissionBatch: String,
     val academicYear: String,
     val semesterOrPhase: String,
     val curriculumVersion: String,
+    val preferredLanguage: String = "English",
     val isOnboarded: Boolean = true,
-    val studyStreakDays: Int = 3,
-    val totalStudyMinutes: Int = 180
+    val studyStreakDays: Int = 0,
+    val totalStudyMinutes: Int = 0
 )
 
 @Entity(tableName = "subjects")
@@ -64,6 +66,7 @@ data class ChapterEntity(
 @Entity(tableName = "study_sessions")
 data class StudySessionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val userEmail: String = "",
     val subjectName: String,
     val topicName: String,
     val dateString: String, // e.g. "Today", "Tomorrow", "Wednesday"
@@ -76,6 +79,7 @@ data class StudySessionEntity(
 @Entity(tableName = "personal_notes")
 data class PersonalNoteEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val userEmail: String = "",
     val courseId: String,
     val subjectName: String,
     val unitName: String,
@@ -99,12 +103,13 @@ data class QuizQuestionEntity(
     val correctOptionIndex: Int, // 0 to 3
     val explanation: String,
     val difficulty: String = "Medium", // Easy, Medium, High-Yield
-    val isVerifiedExamQuestion: Boolean = false
+    val isVerifiedExamQuestion: Boolean = true
 )
 
 @Entity(tableName = "quiz_attempts")
 data class QuizAttemptEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val userEmail: String = "",
     val testTitle: String,
     val subjectName: String,
     val score: Int,
@@ -130,6 +135,7 @@ data class ClinicalCaseEntity(
 @Entity(tableName = "nursing_care_plans")
 data class NursingCarePlanEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val userEmail: String = "",
     val patientInitials: String,
     val medicalDiagnosis: String,
     val subjectiveData: String,
@@ -145,6 +151,7 @@ data class NursingCarePlanEntity(
 @Entity(tableName = "flashcards")
 data class FlashcardEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val userEmail: String = "",
     val subjectName: String,
     val category: String, // Anatomy, Pharmacology, Lab Values, Nursing
     val front: String,
@@ -156,6 +163,7 @@ data class FlashcardEntity(
 @Entity(tableName = "ai_chat_messages")
 data class AiChatMessageEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val userEmail: String = "",
     val role: String, // "user", "assistant"
     val content: String,
     val topicSubject: String = "General Healthcare",
@@ -176,6 +184,7 @@ data class UserAccountEntity(
 @Entity(tableName = "clinical_ward_logs")
 data class ClinicalWardLogEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val userEmail: String = "",
     val wardName: String,
     val postingDate: String,
     val patientCaseType: String,
@@ -185,4 +194,3 @@ data class ClinicalWardLogEntity(
     val hoursLogged: Int = 4,
     val createdAtMillis: Long = System.currentTimeMillis()
 )
-

@@ -276,7 +276,11 @@ fun MedPrepNavGraph(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
                 onNavigate = { screen ->
-                    if (screen == Screen.Onboarding) {
+                    if (screen == Screen.Auth) {
+                        navController.navigate(MedPrepRoutes.AUTH) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    } else if (screen == Screen.Onboarding) {
                         navController.navigateToOnboarding()
                     } else {
                         navController.navigate(screen.toRoute()) {

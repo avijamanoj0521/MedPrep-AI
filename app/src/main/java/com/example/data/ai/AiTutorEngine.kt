@@ -15,6 +15,49 @@ object AiTutorEngine {
         "Describe the stages of normal labor and maternal nursing monitoring requirements."
     )
 
+    /**
+     * Live asynchronous call to Gemini 3.1 Flash-Lite with conversation history and student context.
+     * Never returns hardcoded fake responses if the API request was attempted and failed.
+     */
+    suspend fun getTutorResponse(
+        prompt: String,
+        profile: UserProfileEntity?,
+        selectedSubject: String? = null,
+        conversationHistory: List<Pair<String, String>> = emptyList()
+    ): Result<String> {
+        val geminiResult = GeminiClient.generateTutorAnswer(
+            question = prompt,
+            profile = profile,
+            selectedSubject = selectedSubject,
+            conversationHistory = conversationHistory
+        )
+
+        if (geminiResult.isSuccess) {
+            return geminiResult
+        }
+
+        val error = geminiResult.exceptionOrNull()
+
+        // If API key is not configured, inform the student clearly while providing verified curriculum pearl if matched
+        if (error is IllegalStateException && error.message?.contains("API_KEY_MISSING") == true) {
+            val localKnowledge = generateEducationalResponse(prompt, profile)
+            val combined = """
+                $localKnowledge
+
+                ---
+                ⚙️ **Live AI Setup Guide:**
+                To submit free-form questions and receive live answers from **Gemini 3.1 Flash-Lite** (`gemini-3.1-flash-lite`), please enter your `GEMINI_API_KEY` in the **Secrets panel** of AI Studio or in your `.env` file.
+            """.trimIndent()
+            return Result.success(combined)
+        }
+
+        // Return real error (quota exceeded, bad request, network issue) to show proper error & retry state
+        return geminiResult
+    }
+
+    /**
+     * Offline reference clinical knowledge for standard medical questions and automated test validation.
+     */
     fun generateEducationalResponse(prompt: String, profile: UserProfileEntity?): String {
         val course = profile?.courseName ?: "Healthcare Education"
         val semester = profile?.semesterOrPhase ?: "Current Academic Period"
@@ -98,100 +141,33 @@ object AiTutorEngine {
                 4. **Moment 4: After touching a patient** (e.g., completing physical examination, adjusting bed linen). *Goal: Prevent cross-transmission to subsequent patients.*
                 5. **Moment 5: After touching patient surroundings** (e.g., adjusting IV infusion pump, bedside table, bed rails). *Goal: Eliminate environmental hospital pathogens.*
 
-                **Critical Distinction:**
-                • **Alcohol-Based Hand Rub (20-30 seconds):** Preferred for routine sanitization when hands are NOT visibly soiled.
-                • **Soap and Running Water (40-60 seconds):** MANDATORY when hands are visibly soiled with blood/fluids, or after caring for patients with spore-forming organisms like *Clostridioides difficile*.
+                **Mandatory Soap & Water Indications:**
+                • When hands are visibly soiled or contaminated with proteinaceous material or blood.
+                • After exposure to potential spore-forming pathogens (e.g., *Clostridioides difficile*, Norovirus). Alcohol does NOT kill bacterial spores!
+                • After using the restroom.
 
                 ---
-                💬 *Follow-up: Would you like to practice the 6 steps of hand scrubbing or Biomedical Waste categories next?*
+                ⚠️ *Educational Simulation: Compliant with World Health Organization IPC standards.*
                 """.trimIndent()
             }
 
-            query.contains("nursing care plan") || query.contains("ncp") || query.contains("smart goal") -> {
+            query.contains("care plan") || query.contains("nanda") || query.contains("smart goal") -> {
                 """
-                📝 **MEDPREP AI TUTOR — HOW TO STRUCTURE A NANDA NURSING CARE PLAN (NCP)**
-                *Context: Nursing Process & Clinical Practice*
+                📋 **MEDPREP AI TUTOR — NURSING CARE PLAN FORMULATION**
+                *Context: Nursing Foundations & Clinical Reasoning*
 
-                ### The 5 Standard Phases (ADPIE):
-                1. **Assessment:**
-                   • *Subjective (S):* What the patient reports in their own words (e.g., "Sharp pain in chest rated 8/10").
-                   • *Objective (O):* Measurable clinical data (vitals, lab results, grimacing, diaphoresis).
-                2. **Nursing Diagnosis (NANDA-I Format):**
-                   • Problem + Related To (Etiology/Pathophysiology) + As Evidenced By (Defining Characteristics/Signs & Symptoms).
-                   • *Example:* Acute Pain related to surgical tissue trauma as evidenced by patient statement of 8/10 pain, guarding of abdomen, and tachycardia (HR 108 bpm).
-                3. **Planning & SMART Goals:**
-                   • Must be Specific, Measurable, Achievable, Relevant, and Time-bound.
-                   • *Example:* Patient will report pain reduction to 3/10 or below within 45 minutes following IV analgesic administration.
-                4. **Implementation & Rationales:**
-                   • Independent nursing actions (positioning, splinting, comfort measures, quiet environment).
-                   • Dependent actions (prescribed analgesic titration, oxygen delivery).
-                   • Collaborative actions (physical therapy, surgical consult).
-                   • *Every intervention must have a referenced physiological or evidence-based rationale.*
-                5. **Evaluation:**
-                   • Reassess patient against the SMART goal (Goal Met, Partially Met, or Unmet).
-                   • Document outcome and adjust care plan accordingly.
-
-                ---
-                💡 *Tip: You can use our built-in 'Clinical Lab -> Care Plan Builder' to create and save your personalized NCPs!*
+                ### The 5 Phases of the Nursing Process (ADPIE):
+                1. **Assessment:** Collect Subjective data (patient quotes) & Objective data (vital signs, lab values, physical exam).
+                2. **Diagnosis (NANDA-I):** Format as: *Problem* related to (r/t) *Etiology* as evidenced by (a.e.b.) *Signs/Symptoms*.
+                3. **Planning (SMART Goals):** Specific, Measurable, Achievable, Realistic, and Time-bound.
+                4. **Implementation:** Evidence-based nursing interventions with rationales.
+                5. **Evaluation:** Assessment of whether the client met the stated SMART outcome.
                 """.trimIndent()
             }
 
-            query.contains("abg") || query.contains("blood gas") || query.contains("acidosis") || query.contains("alkalosis") -> {
+            query.contains("digoxin") -> {
                 """
-                🩺 **MEDPREP AI TUTOR — ARTERIAL BLOOD GAS (ABG) INTERPRETATION**
-                *Context: Clinical Physiology, ICU Nursing & Emergency Medicine ($course)*
-
-                ### 1. Normal Reference Ranges:
-                • **pH:** 7.35 – 7.45 (< 7.35 = Acidosis | > 7.45 = Alkalosis)
-                • **PaCO2 (Respiratory Component):** 35 – 45 mmHg
-                • **HCO3⁻ (Metabolic Component):** 22 – 26 mEq/L
-                • **PaO2:** 80 – 100 mmHg | **SaO2:** 95% – 100%
-
-                ### 2. High-Yield "ROME" Mnemonic:
-                • **R - O:** Respiratory Opposite (pH ↑ with PaCO2 ↓ = Resp Alkalosis | pH ↓ with PaCO2 ↑ = Resp Acidosis).
-                • **M - E:** Metabolic Equal (pH ↑ with HCO3⁻ ↑ = Metabolic Alkalosis | pH ↓ with HCO3⁻ ↓ = Metabolic Acidosis).
-
-                ### 3. Step-by-Step Diagnostic Method:
-                1. Inspect **pH**: Acidemic, Alkalemic, or Normal?
-                2. Inspect **PaCO2**: Does it explain the pH shift?
-                3. Inspect **HCO3⁻**: Does it explain the pH shift?
-                4. Determine **Compensation**:
-                   • *Uncompensated:* Abnormal pH, one component abnormal, other normal.
-                   • *Partially Compensated:* Abnormal pH, both PaCO2 and HCO3⁻ abnormal.
-                   • *Fully Compensated:* Normal pH (7.35–7.45) with abnormal PaCO2 and HCO3⁻.
-
-                ---
-                ⚠️ *Educational Simulation: Always correlate ABG values with clinical vitals and physical signs.*
-                """.trimIndent()
-            }
-
-            query.contains("drip rate") || query.contains("dosage") || query.contains("calculation") || query.contains("drop factor") -> {
-                """
-                💉 **MEDPREP AI TUTOR — IV DRIP RATE & DOSAGE CALCULATIONS**
-                *Context: Nursing Foundations & Clinical Pharmacology ($course)*
-
-                ### 1. Standard IV Drip Rate Formula:
-                $$ \text{Drops per minute (gtt/min)} = \frac{\text{Total Volume (mL)} \times \text{Drop Factor (gtt/mL)}}{\text{Time in Minutes}} $$
-
-                ### 2. Drop Factor Standards:
-                • **Macrodrip Set:** 10, 15, or 20 drops/mL (Standard adult IV infusion).
-                • **Microdrip (Pediatric / Buretrol) Set:** 60 drops/mL ($1 \text{ mL} = 60 \text{ drops}$).
-
-                ### 3. Worked Example:
-                *Problem:* Infuse 1000 mL Normal Saline over 8 hours using a 15 gtt/mL macrodrip set.
-                1. Total Volume = 1000 mL
-                2. Time in Minutes = 8 hours × 60 = 480 minutes
-                3. Calculation: $(1000 \times 15) \div 480 = 15000 \div 480 \approx 31.25$
-                4. **Answer:** Set IV flow rate at **31 drops/minute**.
-
-                ---
-                💊 *Safety Rule: Independent double-check with another licensed nurse is mandatory for high-alert medications (Heparin, Insulin, Potassium, Chemotherapy).*
-                """.trimIndent()
-            }
-
-            query.contains("digoxin") || query.contains("lanoxin") || query.contains("cardiac glycoside") -> {
-                """
-                🩺 **MEDPREP AI TUTOR — DIGOXIN (CARDIAC GLYCOSIDE)**
+                💊 **MEDPREP AI TUTOR — CLINICAL PHARMACOLOGY: DIGOXIN**
                 *Context: Clinical Pharmacology & Adult Health Nursing*
 
                 ### 1. Mechanism of Action:
@@ -216,27 +192,26 @@ object AiTutorEngine {
 
             else -> {
                 """
-                🩺 **MEDPREP AI TUTOR — CLINICAL & ACADEMIC EXPLANATION**
-                *Tailored for: $course ($semester)*
+                🩺 **MEDPREP AI TUTOR — CLINICAL & ACADEMIC TOPIC GUIDE**
+                *Student Program: $course ($semester)*
 
-                ### Concept Overview:
-                You inquired about: **"${prompt.take(80)}"**
+                ### Topic Inquired:
+                **"${prompt.take(120)}"**
 
-                ### Core Principles & Mechanisms:
-                1. **Biological & Anatomical Foundation:**
-                   In collegiate medical and healthcare education, understanding both normal baseline physiology and aberrant pathophysiology is key to diagnostic accuracy and patient management.
-                2. **Step-by-Step Clinical Reasoning:**
-                   • Correlate structural anatomy with functional cellular mechanisms.
-                   • Identify high-risk red flag signs (abnormal vitals, acute hypoxia, refractory hypotension, altered mental status).
-                   • Prioritize ABCs (Airway, Breathing, Circulation) in all acute presentations.
-                3. **Pharmacology & Nursing Safety:**
-                   • Always verify the **Rights of Medication Administration** (Right patient, drug, dose, route, time, documentation, reason, response).
-                   • Anticipate contraindications, drug-drug interactions, and organ toxicities.
-                4. **High-Yield University Examination Tip:**
-                   When answering university theory questions, structure your response under standard medical headings: *Definition, Etiology, Pathophysiology flowchart, Clinical Manifestations, Diagnostic Investigations, Management (Medical, Surgical & Nursing), and Complications.*
+                ### Academic Study Guidelines:
+                1. **Anatomical & Physiological Framework:**
+                   Identify the primary organ system involved, its baseline histological structure, and normal physiological homeostasis.
+                2. **Pathophysiology & Disease Mechanism:**
+                   Trace how cellular injury or physiological dysregulation manifests as clinical symptoms and abnormal diagnostic markers.
+                3. **Diagnostic Investigations & Lab Correlates:**
+                   Correlate imaging (X-Ray, CT, MRI, Ultrasound) and laboratory values (CBC, electrolytes, enzymes, arterial blood gases).
+                4. **Medical & Nursing Management:**
+                   • Acute resuscitation priorities (Airway, Breathing, Circulation).
+                   • Pharmacotherapy, dosages, contraindications, and nursing monitoring.
+                   • Patient education and recovery benchmarks.
 
                 ---
-                ⚠️ *Disclaimer: MedPrep AI provides educational simulations for healthcare students and does not replace qualified clinical mentoring or professional clinical guidelines.*
+                💡 *Tip:* Ask a specific question (e.g., "What are the drug interactions of Warfarin?", "Explain coronary circulation anatomy") to receive in-depth clinical analysis.
                 """.trimIndent()
             }
         }

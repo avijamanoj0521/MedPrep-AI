@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -43,6 +44,9 @@ fun MedPrepApp(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: MedPrepRoutes.DASHBOARD
 
+    val activeAccount by viewModel.activeUserAccount.collectAsState()
+    val isAuthenticated = activeAccount != null
+
     // Determine current active screen for top and bottom navigation bars
     val currentScreen = when {
         currentRoute.startsWith("onboarding") -> Screen.Onboarding
@@ -63,7 +67,7 @@ fun MedPrepApp(
         else -> Screen.Dashboard
     }
 
-    val showBars = currentScreen !in listOf(
+    val showBars = isAuthenticated && currentScreen !in listOf(
         Screen.Auth,
         Screen.Onboarding,
         Screen.SubjectDetail,
@@ -106,7 +110,7 @@ fun MedPrepApp(
             MedPrepNavGraph(
                 navController = navController,
                 viewModel = viewModel,
-                startDestination = MedPrepRoutes.DASHBOARD,
+                startDestination = if (isAuthenticated) MedPrepRoutes.DASHBOARD else MedPrepRoutes.AUTH,
                 modifier = Modifier.fillMaxSize()
             )
         }

@@ -112,10 +112,12 @@ fun ProfileSettingsScreen(
                     Column(modifier = Modifier.padding(14.dp)) {
                         Text("Academic Affiliation", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MedNavyPrimary)
                         Spacer(modifier = Modifier.height(8.dp))
-                        ProfileDetailRow("University:", profile?.university ?: "Rajiv Gandhi University of Health Sciences")
-                        ProfileDetailRow("College:", profile?.collegeName ?: "Government College of Nursing")
-                        ProfileDetailRow("Batch:", profile?.admissionBatch ?: "2023-2027 Batch")
-                        ProfileDetailRow("Curriculum:", profile?.curriculumVersion ?: "INC Revised 2021")
+                        ProfileDetailRow("University:", profile?.university ?: "State Health Sciences University")
+                        ProfileDetailRow("College:", profile?.collegeName ?: "Government Medical College")
+                        ProfileDetailRow("Level:", profile?.educationLevel ?: "Undergraduate Healthcare")
+                        ProfileDetailRow("Batch:", profile?.admissionBatch ?: "2024-2028 Batch")
+                        ProfileDetailRow("Curriculum:", profile?.curriculumVersion ?: "Accredited Standard Curriculum")
+                        ProfileDetailRow("Language:", profile?.preferredLanguage ?: "English")
                     }
                 }
             }
@@ -143,7 +145,11 @@ fun ProfileSettingsScreen(
                     }
 
                     Button(
-                        onClick = { viewModel.logoutStudent() },
+                        onClick = {
+                            viewModel.logoutStudent {
+                                onNavigate(Screen.Auth)
+                            }
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
                         modifier = Modifier.fillMaxWidth().testTag("logout_student_button")
                     ) {

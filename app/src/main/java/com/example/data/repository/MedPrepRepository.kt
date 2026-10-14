@@ -11,46 +11,23 @@ class MedPrepRepository(private val dao: MedPrepDao) {
 
     val userProfile: Flow<UserProfileEntity?> = dao.getUserProfileFlow()
 
+    fun getProfileForUser(email: String): Flow<UserProfileEntity?> = dao.getProfileByEmailFlow(email)
+
+    suspend fun getProfileByEmail(email: String): UserProfileEntity? = withContext(Dispatchers.IO) {
+        dao.getProfileByEmail(email)
+    }
+
     suspend fun ensureInitialized() = withContext(Dispatchers.IO) {
-        val profile = dao.getUserProfile()
-        if (profile == null) {
-            dao.insertOrUpdateProfile(
-                UserProfileEntity(
-                    fullName = "Priya Sharma",
-                    email = "priya.nursing@medprep.edu",
-                    courseId = "bsc_nursing",
-                    courseName = "B.Sc Nursing (Bachelor of Science in Nursing)",
-                    university = "Rajiv Gandhi University of Health Sciences",
-                    collegeName = "Government College of Nursing, Bengaluru",
-                    admissionBatch = "2023-2027 Batch",
-                    academicYear = "1st Year",
-                    semesterOrPhase = "Semester 1",
-                    curriculumVersion = "INC Revised CBME Curriculum 2021",
-                    isOnboarded = true,
-                    studyStreakDays = 5,
-                    totalStudyMinutes = 240
-                )
-            )
+        // Only seed academic curricula and question banks if empty
+        val existingQuestions = dao.getRandomQuestions(1)
+        if (existingQuestions.isEmpty()) {
             dao.insertSubjects(SeedData.initialSubjects())
             dao.insertUnits(SeedData.initialUnits())
             dao.insertChapters(SeedData.initialChapters())
-            for (session in SeedData.initialStudySessions()) {
-                dao.insertStudySession(session)
-            }
-            for (note in SeedData.initialPersonalNotes()) {
-                dao.insertNote(note)
-            }
             dao.insertQuestions(SeedData.initialQuestions())
             dao.insertClinicalCases(SeedData.initialClinicalCases())
-            for (plan in SeedData.initialNursingCarePlans()) {
-                dao.insertCarePlan(plan)
-            }
             for (card in SeedData.initialFlashcards()) {
                 dao.insertFlashcard(card)
-            }
-            dao.insertUserAccount(SeedData.defaultUserAccount())
-            for (ward in SeedData.initialWardLogs()) {
-                dao.insertWardLog(ward)
             }
         }
     }
@@ -91,6 +68,9 @@ class MedPrepRepository(private val dao: MedPrepDao) {
     // Timetable
     val studySessions: Flow<List<StudySessionEntity>> = dao.getAllStudySessions()
 
+    fun getStudySessionsForUser(email: String): Flow<List<StudySessionEntity>> =
+        dao.getStudySessionsForUser(email)
+
     suspend fun addStudySession(session: StudySessionEntity) = withContext(Dispatchers.IO) {
         dao.insertStudySession(session)
     }
@@ -106,6 +86,12 @@ class MedPrepRepository(private val dao: MedPrepDao) {
     // Notes
     val allNotes: Flow<List<PersonalNoteEntity>> = dao.getAllNotes()
 
+    fun getNotesForUser(email: String): Flow<List<PersonalNoteEntity>> =
+        dao.getNotesForUser(email)
+
+    fun getNotesForCourse(courseId: String): Flow<List<PersonalNoteEntity>> =
+        dao.getNotesForCourse(courseId)
+
     suspend fun saveNote(note: PersonalNoteEntity) = withContext(Dispatchers.IO) {
         dao.insertNote(note)
     }
@@ -119,14 +105,22 @@ class MedPrepRepository(private val dao: MedPrepDao) {
     }
 
     // Quizzes
+    val allQuestions: Flow<List<QuizQuestionEntity>> = dao.getAllQuestions()
+
     fun getQuestionsForCourse(courseId: String): Flow<List<QuizQuestionEntity>> =
         dao.getQuestionsForCourse(courseId)
+
+    fun getQuestionsForSubject(courseId: String, subjectName: String): Flow<List<QuizQuestionEntity>> =
+        dao.getQuestionsForSubject(courseId, subjectName)
 
     suspend fun getRandomQuestions(count: Int): List<QuizQuestionEntity> = withContext(Dispatchers.IO) {
         dao.getRandomQuestions(count)
     }
 
     val quizAttempts: Flow<List<QuizAttemptEntity>> = dao.getAllQuizAttempts()
+
+    fun getQuizAttemptsForUser(email: String): Flow<List<QuizAttemptEntity>> =
+        dao.getQuizAttemptsForUser(email)
 
     suspend fun recordQuizAttempt(attempt: QuizAttemptEntity) = withContext(Dispatchers.IO) {
         dao.insertQuizAttempt(attempt)
@@ -135,6 +129,9 @@ class MedPrepRepository(private val dao: MedPrepDao) {
     // Clinical Learning
     val clinicalCases: Flow<List<ClinicalCaseEntity>> = dao.getAllClinicalCases()
     val nursingCarePlans: Flow<List<NursingCarePlanEntity>> = dao.getAllCarePlans()
+
+    fun getCarePlansForUser(email: String): Flow<List<NursingCarePlanEntity>> =
+        dao.getCarePlansForUser(email)
 
     suspend fun addCarePlan(plan: NursingCarePlanEntity) = withContext(Dispatchers.IO) {
         dao.insertCarePlan(plan)
@@ -158,8 +155,15 @@ class MedPrepRepository(private val dao: MedPrepDao) {
     // AI Chat
     val chatMessages: Flow<List<AiChatMessageEntity>> = dao.getAllAiChatMessages()
 
+    fun getChatMessagesForUser(email: String): Flow<List<AiChatMessageEntity>> =
+        dao.getChatMessagesForUser(email)
+
     suspend fun saveChatMessage(message: AiChatMessageEntity) = withContext(Dispatchers.IO) {
         dao.insertChatMessage(message)
+    }
+
+    suspend fun clearChatForUser(email: String) = withContext(Dispatchers.IO) {
+        dao.clearChatForUser(email)
     }
 
     suspend fun clearChat() = withContext(Dispatchers.IO) {
@@ -169,15 +173,20 @@ class MedPrepRepository(private val dao: MedPrepDao) {
     // Authentication & Sessions
     val activeUserAccount: Flow<UserAccountEntity?> = dao.getActiveUserAccountFlow()
 
-    suspend fun login(email: String, password: String):Result<UserAccountEntity> = withContext(Dispatchers.IO) {
-        val account = dao.getUserAccount(email.trim().lowercase())
+    suspend fun getActiveUserAccount(): UserAccountEntity? = withContext(Dispatchers.IO) {
+        dao.getActiveUserAccount()
+    }
+
+    suspend fun login(email: String, password: String): Result<UserAccountEntity> = withContext(Dispatchers.IO) {
+        val cleanEmail = email.trim().lowercase()
+        val account = dao.getUserAccount(cleanEmail)
         if (account == null) {
-            Result.failure(Exception("Account not found. Please register your student account."))
+            Result.failure(Exception("No account registered for '$cleanEmail'. Please switch to Register."))
         } else if (account.passwordHash != password) {
-            Result.failure(Exception("Incorrect password. Please verify credentials."))
+            Result.failure(Exception("Incorrect password for this student account. Please check credentials or reset password."))
         } else {
             dao.logoutAllAccounts()
-            dao.setAccountActive(account.email)
+            dao.setAccountActive(cleanEmail)
             Result.success(account.copy(isActiveSession = true))
         }
     }
@@ -192,13 +201,13 @@ class MedPrepRepository(private val dao: MedPrepDao) {
         val cleanEmail = email.trim().lowercase()
         val existing = dao.getUserAccount(cleanEmail)
         if (existing != null) {
-            Result.failure(Exception("An account with this college email already exists. Please login."))
+            Result.failure(Exception("An account with this college email ($cleanEmail) already exists. Please login instead."))
         } else {
             val newAccount = UserAccountEntity(
                 email = cleanEmail,
                 passwordHash = password,
-                fullName = fullName,
-                collegeName = collegeName,
+                fullName = fullName.trim(),
+                collegeName = collegeName.trim(),
                 courseId = courseId,
                 isActiveSession = true
             )
@@ -208,12 +217,26 @@ class MedPrepRepository(private val dao: MedPrepDao) {
         }
     }
 
+    suspend fun resetPassword(email: String, newPassword: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val cleanEmail = email.trim().lowercase()
+        val existing = dao.getUserAccount(cleanEmail)
+        if (existing == null) {
+            Result.failure(Exception("No registered account found with email '$cleanEmail'."))
+        } else {
+            dao.updatePassword(cleanEmail, newPassword)
+            Result.success(Unit)
+        }
+    }
+
     suspend fun logout() = withContext(Dispatchers.IO) {
         dao.logoutAllAccounts()
     }
 
     // Ward Logs
     val wardLogs: Flow<List<ClinicalWardLogEntity>> = dao.getAllWardLogs()
+
+    fun getWardLogsForUser(email: String): Flow<List<ClinicalWardLogEntity>> =
+        dao.getWardLogsForUser(email)
 
     suspend fun addWardLog(log: ClinicalWardLogEntity) = withContext(Dispatchers.IO) {
         dao.insertWardLog(log)

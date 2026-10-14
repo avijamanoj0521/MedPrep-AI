@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
         UserAccountEntity::class,
         ClinicalWardLogEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class MedPrepDatabase : RoomDatabase() {
@@ -48,43 +48,19 @@ abstract class MedPrepDatabase : RoomDatabase() {
                     .addCallback(object : Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)
-                            // Populate seed data in background
+                            // Populate accredited curricula, question banks, and clinical reference cases
                             CoroutineScope(Dispatchers.IO).launch {
                                 val dao = getDatabase(context).medPrepDao()
-                                dao.insertOrUpdateProfile(
-                                    UserProfileEntity(
-                                        fullName = "Priya Sharma",
-                                        email = "priya.nursing@medprep.edu",
-                                        courseId = "bsc_nursing",
-                                        courseName = "B.Sc Nursing (Bachelor of Science in Nursing)",
-                                        university = "Rajiv Gandhi University of Health Sciences",
-                                        collegeName = "Government College of Nursing, Bengaluru",
-                                        admissionBatch = "2023-2027 Batch",
-                                        academicYear = "1st Year",
-                                        semesterOrPhase = "Semester 1",
-                                        curriculumVersion = "INC Revised CBME Curriculum 2021",
-                                        isOnboarded = true,
-                                        studyStreakDays = 5,
-                                        totalStudyMinutes = 240
-                                    )
-                                )
                                 dao.insertSubjects(SeedData.initialSubjects())
                                 dao.insertUnits(SeedData.initialUnits())
                                 dao.insertChapters(SeedData.initialChapters())
-                                for (session in SeedData.initialStudySessions()) {
-                                    dao.insertStudySession(session)
-                                }
-                                for (note in SeedData.initialPersonalNotes()) {
-                                    dao.insertNote(note)
-                                }
                                 dao.insertQuestions(SeedData.initialQuestions())
                                 dao.insertClinicalCases(SeedData.initialClinicalCases())
-                                for (plan in SeedData.initialNursingCarePlans()) {
-                                    dao.insertCarePlan(plan)
-                                }
                                 for (card in SeedData.initialFlashcards()) {
                                     dao.insertFlashcard(card)
                                 }
+                                // No hardcoded student profile or active session is created by default.
+                                // Every student starts fresh and signs into their own personal account.
                             }
                         }
                     })

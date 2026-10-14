@@ -185,7 +185,7 @@ fun AiTutorScreen(viewModel: MedPrepViewModel) {
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Consulting verified medical and nursing knowledge base...",
+                                text = "Consulting Gemini 3.1 Flash-Lite (gemini-3.1-flash-lite)...",
                                 fontSize = 11.sp,
                                 color = MedTealPrimary,
                                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic

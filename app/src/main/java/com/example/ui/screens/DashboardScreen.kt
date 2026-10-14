@@ -44,6 +44,9 @@ fun DashboardScreen(
     val profile by viewModel.userProfile.collectAsState()
     val subjects by viewModel.enrolledSubjects.collectAsState()
     val sessions by viewModel.studySessions.collectAsState()
+    val realStreak by viewModel.studyStreakDays.collectAsState()
+    val realStudyMinutes by viewModel.totalStudyMinutes.collectAsState()
+    val realQuizzesCount by viewModel.quizzesTakenCount.collectAsState()
 
     val nextSession = sessions.firstOrNull { !it.isCompleted }
 
@@ -201,27 +204,27 @@ fun DashboardScreen(
             ) {
                 MetricSummaryCard(
                     title = "Study Streak",
-                    value = "${profile?.studyStreakDays ?: 5} Days",
-                    subtitle = "Consistent Learner",
+                    value = "$realStreak Days",
+                    subtitle = if (realStreak > 0) "Active Streak" else "Start streak today",
                     icon = Icons.Default.LocalFireDepartment,
-                    iconTint = Color(0xFFE65100),
+                    iconTint = if (realStreak > 0) Color(0xFFE65100) else Color.Gray,
                     modifier = Modifier.weight(1f)
                 )
 
                 MetricSummaryCard(
                     title = "Study Logged",
-                    value = "${(profile?.totalStudyMinutes ?: 240) / 60}h ${(profile?.totalStudyMinutes ?: 240) % 60}m",
-                    subtitle = "This Semester",
+                    value = "${realStudyMinutes / 60}h ${realStudyMinutes % 60}m",
+                    subtitle = if (realStudyMinutes > 0) "This Semester" else "No time logged",
                     icon = Icons.Default.Schedule,
                     iconTint = MedTealPrimary,
                     modifier = Modifier.weight(1f)
                 )
 
                 MetricSummaryCard(
-                    title = "Subjects",
-                    value = "${subjects.size}",
-                    subtitle = profile?.semesterOrPhase ?: "Active",
-                    icon = Icons.Default.AutoStories,
+                    title = "Quizzes Taken",
+                    value = "$realQuizzesCount",
+                    subtitle = if (realQuizzesCount > 0) "Completed" else "Practice MCQs",
+                    icon = Icons.Default.Quiz,
                     iconTint = MedNavyPrimary,
                     modifier = Modifier.weight(1f)
                 )

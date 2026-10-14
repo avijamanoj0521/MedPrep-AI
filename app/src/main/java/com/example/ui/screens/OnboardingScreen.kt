@@ -34,15 +34,17 @@ fun OnboardingScreen(
 ) {
     val profile by viewModel.userProfile.collectAsState()
 
-    var fullName by remember(profile) { mutableStateOf(profile?.fullName ?: "Priya Sharma") }
-    var email by remember(profile) { mutableStateOf(profile?.email ?: "priya.nursing@medprep.edu") }
+    var fullName by remember(profile) { mutableStateOf(profile?.fullName ?: "") }
+    var email by remember(profile) { mutableStateOf(profile?.email ?: "") }
     var selectedCourseId by remember(profile) { mutableStateOf(profile?.courseId ?: "bsc_nursing") }
-    var university by remember(profile) { mutableStateOf(profile?.university ?: "Rajiv Gandhi University of Health Sciences") }
-    var collegeName by remember(profile) { mutableStateOf(profile?.collegeName ?: "Government College of Nursing, Bengaluru") }
-    var admissionBatch by remember(profile) { mutableStateOf(profile?.admissionBatch ?: "2023-2027 Batch") }
+    var university by remember(profile) { mutableStateOf(profile?.university ?: "State Health Sciences University") }
+    var collegeName by remember(profile) { mutableStateOf(profile?.collegeName ?: "Government Medical College") }
+    var admissionBatch by remember(profile) { mutableStateOf(profile?.admissionBatch ?: "2024-2028 Batch") }
     var academicYear by remember(profile) { mutableStateOf(profile?.academicYear ?: "1st Year") }
     var semesterOrPhase by remember(profile) { mutableStateOf(profile?.semesterOrPhase ?: "Semester 1") }
-    var curriculumVersion by remember(profile) { mutableStateOf(profile?.curriculumVersion ?: "INC Revised CBME Curriculum 2021") }
+    var curriculumVersion by remember(profile) { mutableStateOf(profile?.curriculumVersion ?: "Accredited Standard Curriculum") }
+    var educationLevel by remember(profile) { mutableStateOf(profile?.educationLevel ?: "Undergraduate Healthcare") }
+    var preferredLanguage by remember(profile) { mutableStateOf(profile?.preferredLanguage ?: "English") }
 
     var step by remember { mutableIntStateOf(1) } // 1: Program, 2: Institution & Batch, 3: Semester/Phase
 
@@ -334,7 +336,9 @@ fun OnboardingScreen(
                                     admissionBatch = admissionBatch,
                                     academicYear = academicYear,
                                     semesterOrPhase = semesterOrPhase,
-                                    curriculumVersion = curriculumVersion
+                                    curriculumVersion = curriculumVersion,
+                                    educationLevel = educationLevel,
+                                    preferredLanguage = preferredLanguage
                                 )
                                 onComplete()
                             }

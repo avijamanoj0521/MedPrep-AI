@@ -8,6 +8,7 @@ import com.example.data.local.MedPrepDatabase
 import com.example.data.local.SeedData
 import com.example.data.model.*
 import com.example.data.repository.MedPrepRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -30,12 +31,14 @@ sealed class Screen(val title: String, val route: String) {
     object AudioTranscribe : Screen("Clinical Voice Transcribe", "audio_transcribe")
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class MedPrepViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: MedPrepRepository
 
-    val userProfile: StateFlow<UserProfileEntity?>
     val activeUserAccount: StateFlow<UserAccountEntity?>
+
+    val userProfile: StateFlow<UserProfileEntity?>
     val wardLogs: StateFlow<List<ClinicalWardLogEntity>>
     val studySessions: StateFlow<List<StudySessionEntity>>
     val personalNotes: StateFlow<List<PersonalNoteEntity>>
@@ -57,15 +60,12 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
     private val _isAiThinking = MutableStateFlow(false)
     val isAiThinking: StateFlow<Boolean> = _isAiThinking.asStateFlow()
 
+    private val _aiError = MutableStateFlow<String?>(null)
+    val aiError: StateFlow<String?> = _aiError.asStateFlow()
+
     init {
         val database = MedPrepDatabase.getDatabase(application)
         repository = MedPrepRepository(database.medPrepDao())
-
-        userProfile = repository.userProfile.stateIn(
-            viewModelScope,
-            SharingStarted.Eagerly,
-            null
-        )
 
         activeUserAccount = repository.activeUserAccount.stateIn(
             viewModelScope,
@@ -73,37 +73,99 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
             null
         )
 
-        wardLogs = repository.wardLogs.stateIn(
+        // User Profile scoped to the currently active account email
+        userProfile = activeUserAccount.flatMapLatest { account ->
+            if (account != null) {
+                repository.getProfileForUser(account.email)
+            } else {
+                flowOf(null)
+            }
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            null
+        )
+
+        // Notes isolated to active student
+        personalNotes = activeUserAccount.flatMapLatest { account ->
+            if (account != null) {
+                repository.getNotesForUser(account.email)
+            } else {
+                flowOf(emptyList())
+            }
+        }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
             emptyList()
         )
 
-        studySessions = repository.studySessions.stateIn(
+        // Study sessions isolated to active student
+        studySessions = activeUserAccount.flatMapLatest { account ->
+            if (account != null) {
+                repository.getStudySessionsForUser(account.email)
+            } else {
+                flowOf(emptyList())
+            }
+        }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
             emptyList()
         )
 
-        personalNotes = repository.allNotes.stateIn(
+        // Quiz attempts isolated to active student
+        quizAttempts = activeUserAccount.flatMapLatest { account ->
+            if (account != null) {
+                repository.getQuizAttemptsForUser(account.email)
+            } else {
+                flowOf(emptyList())
+            }
+        }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
             emptyList()
         )
 
-        quizAttempts = repository.quizAttempts.stateIn(
+        // Clinical Ward Logs isolated to active student
+        wardLogs = activeUserAccount.flatMapLatest { account ->
+            if (account != null) {
+                repository.getWardLogsForUser(account.email)
+            } else {
+                flowOf(emptyList())
+            }
+        }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
             emptyList()
         )
 
+        // Nursing Care Plans isolated to active student
+        nursingCarePlans = activeUserAccount.flatMapLatest { account ->
+            if (account != null) {
+                repository.getCarePlansForUser(account.email)
+            } else {
+                flowOf(emptyList())
+            }
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyList()
+        )
+
+        // AI Chat Messages isolated to active student
+        chatMessages = activeUserAccount.flatMapLatest { account ->
+            if (account != null) {
+                repository.getChatMessagesForUser(account.email)
+            } else {
+                flowOf(emptyList())
+            }
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyList()
+        )
+
+        // Curricular Reference Content (available to all registered students)
         clinicalCases = repository.clinicalCases.stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            emptyList()
-        )
-
-        nursingCarePlans = repository.nursingCarePlans.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
             emptyList()
@@ -115,18 +177,12 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
             emptyList()
         )
 
-        chatMessages = repository.chatMessages.stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            emptyList()
-        )
-
         viewModelScope.launch {
             repository.ensureInitialized()
         }
     }
 
-    // Dynamic subjects based on profile and selected semester
+    // Dynamic subjects based on student profile and selected semester
     val enrolledSubjects: StateFlow<List<SubjectEntity>> = combine(
         userProfile,
         _selectedSemester
@@ -141,6 +197,7 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         emptyList()
     )
 
+    // Complete course syllabus
     val allCourseSubjects: StateFlow<List<SubjectEntity>> = userProfile.flatMapLatest { profile ->
         val courseId = profile?.courseId ?: "bsc_nursing"
         repository.getSubjectsForCourse(courseId)
@@ -150,13 +207,35 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         emptyList()
     )
 
-    val unitsForSelectedSubject: StateFlow<List<UnitEntity>> = _selectedSubject.flatMapLatest { subj ->
-        if (subj != null) {
-            repository.getUnits(subj.id)
+    // Prescribed units for the currently selected subject in SubjectDetailScreen
+    val unitsForSelectedSubject: StateFlow<List<UnitEntity>> = _selectedSubject.flatMapLatest { subject ->
+        if (subject != null) {
+            repository.getUnits(subject.id)
         } else {
             flowOf(emptyList())
         }
     }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
+    // Dynamic Calculated Metrics for Dashboard (No Fake Data!)
+    val studyStreakDays: StateFlow<Int> = studySessions.map { sessions ->
+        val completed = sessions.filter { it.isCompleted }
+        if (completed.isEmpty()) 0 else completed.map { it.dateString }.distinct().size
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val totalStudyMinutes: StateFlow<Int> = studySessions.map { sessions ->
+        sessions.filter { it.isCompleted }.sumOf { it.durationMinutes }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val quizzesTakenCount: StateFlow<Int> = quizAttempts.map { attempts ->
+        attempts.size
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    // All available quiz questions for the student's program
+    val allQuizQuestions: StateFlow<List<QuizQuestionEntity>> = repository.allQuestions.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         emptyList()
@@ -215,23 +294,28 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         admissionBatch: String,
         academicYear: String,
         semesterOrPhase: String,
-        curriculumVersion: String
+        curriculumVersion: String,
+        educationLevel: String = "Undergraduate Healthcare",
+        preferredLanguage: String = "English"
     ) {
         viewModelScope.launch {
             val updated = UserProfileEntity(
-                fullName = fullName,
-                email = email,
+                id = email.trim().lowercase(),
+                fullName = fullName.trim(),
+                email = email.trim().lowercase(),
+                educationLevel = educationLevel,
+                university = university,
                 courseId = courseId,
                 courseName = courseName,
-                university = university,
-                collegeName = college,
+                collegeName = college.trim(),
                 admissionBatch = admissionBatch,
                 academicYear = academicYear,
                 semesterOrPhase = semesterOrPhase,
                 curriculumVersion = curriculumVersion,
+                preferredLanguage = preferredLanguage,
                 isOnboarded = true,
-                studyStreakDays = 5,
-                totalStudyMinutes = 240
+                studyStreakDays = studyStreakDays.value,
+                totalStudyMinutes = totalStudyMinutes.value
             )
             repository.saveProfile(updated)
             _selectedSemester.value = semesterOrPhase
@@ -248,9 +332,11 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         durationMinutes: Int,
         sessionType: String
     ) {
+        val studentEmail = activeUserAccount.value?.email ?: ""
         viewModelScope.launch {
             repository.addStudySession(
                 StudySessionEntity(
+                    userEmail = studentEmail,
                     subjectName = subjectName,
                     topicName = topicName,
                     dateString = dateString,
@@ -283,10 +369,12 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         content: String,
         category: String
     ) {
+        val studentEmail = activeUserAccount.value?.email ?: ""
+        val profile = userProfile.value
         viewModelScope.launch {
-            val profile = userProfile.value
             repository.saveNote(
                 PersonalNoteEntity(
+                    userEmail = studentEmail,
                     courseId = profile?.courseId ?: "bsc_nursing",
                     subjectName = subjectName,
                     unitName = unitName,
@@ -297,6 +385,12 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
                     updatedAtMillis = System.currentTimeMillis()
                 )
             )
+        }
+    }
+
+    fun updatePersonalNote(note: PersonalNoteEntity) {
+        viewModelScope.launch {
+            repository.saveNote(note)
         }
     }
 
@@ -320,9 +414,11 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         totalQuestions: Int,
         timeTakenSeconds: Int
     ) {
+        val studentEmail = activeUserAccount.value?.email ?: ""
         viewModelScope.launch {
             repository.recordQuizAttempt(
                 QuizAttemptEntity(
+                    userEmail = studentEmail,
                     testTitle = testTitle,
                     subjectName = subjectName,
                     score = score,
@@ -332,6 +428,34 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
                 )
             )
         }
+    }
+
+    /**
+     * Builds a quiz of requested count (10 to 15 questions) with zero duplicates.
+     */
+    fun generateQuizQuestions(targetCount: Int, subjectFilter: String? = null): List<QuizQuestionEntity> {
+        val count = targetCount.coerceIn(10, 15)
+        val allAvailable = allQuizQuestions.value.ifEmpty { SeedData.initialQuestions() }
+
+        val filtered = if (!subjectFilter.isNullOrBlank() && subjectFilter != "All Subjects") {
+            allAvailable.filter { it.subjectName.equals(subjectFilter, ignoreCase = true) }
+        } else {
+            allAvailable
+        }
+
+        // If filtered has enough questions, take count
+        if (filtered.size >= count) {
+            return filtered.shuffled().distinctBy { it.id }.take(count)
+        }
+
+        // Otherwise supplement with questions from general bank so the quiz always has the full count
+        val result = filtered.toMutableList()
+        val remaining = allAvailable.filterNot { item -> result.any { it.id == item.id } }.shuffled()
+        for (item in remaining) {
+            if (result.size >= count) break
+            result.add(item)
+        }
+        return result.take(count)
     }
 
     // Nursing Care Plan
@@ -346,9 +470,11 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         rationales: String,
         evaluation: String
     ) {
+        val studentEmail = activeUserAccount.value?.email ?: ""
         viewModelScope.launch {
             repository.addCarePlan(
                 NursingCarePlanEntity(
+                    userEmail = studentEmail,
                     patientInitials = patientInitials,
                     medicalDiagnosis = medicalDiagnosis,
                     subjectiveData = subjectiveData,
@@ -377,9 +503,11 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         front: String,
         back: String
     ) {
+        val studentEmail = activeUserAccount.value?.email ?: ""
         viewModelScope.launch {
             repository.addFlashcard(
                 FlashcardEntity(
+                    userEmail = studentEmail,
                     subjectName = subjectName,
                     category = category,
                     front = front,
@@ -397,13 +525,15 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // AI Tutor Chat
+    // Real AI Tutor using Gemini 3.1 Flash-Lite
     fun sendAiPrompt(promptText: String) {
         val trimmed = promptText.trim()
         if (trimmed.isEmpty()) return
+        val studentEmail = activeUserAccount.value?.email ?: ""
 
         viewModelScope.launch {
             val userMsg = AiChatMessageEntity(
+                userEmail = studentEmail,
                 role = "user",
                 content = trimmed,
                 topicSubject = _selectedSubject.value?.name ?: "General Healthcare",
@@ -412,24 +542,47 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
             repository.saveChatMessage(userMsg)
 
             _isAiThinking.value = true
+            _aiError.value = null
 
-            // Generate verified response
-            val responseText = AiTutorEngine.generateEducationalResponse(trimmed, userProfile.value)
+            val history = chatMessages.value.takeLast(6).map { it.role to it.content }
 
-            val aiMsg = AiChatMessageEntity(
-                role = "assistant",
-                content = responseText,
-                topicSubject = _selectedSubject.value?.name ?: "General Healthcare",
-                timestampMillis = System.currentTimeMillis()
+            val result = AiTutorEngine.getTutorResponse(
+                prompt = trimmed,
+                profile = userProfile.value,
+                selectedSubject = _selectedSubject.value?.name,
+                conversationHistory = history
             )
-            repository.saveChatMessage(aiMsg)
+
+            result.onSuccess { responseText ->
+                val aiMsg = AiChatMessageEntity(
+                    userEmail = studentEmail,
+                    role = "assistant",
+                    content = responseText,
+                    topicSubject = _selectedSubject.value?.name ?: "General Healthcare",
+                    timestampMillis = System.currentTimeMillis()
+                )
+                repository.saveChatMessage(aiMsg)
+            }.onFailure { err ->
+                val errorMsg = err.localizedMessage ?: "Unknown AI error occurred."
+                _aiError.value = errorMsg
+                val errorBubble = AiChatMessageEntity(
+                    userEmail = studentEmail,
+                    role = "assistant",
+                    content = "⚠️ **AI Tutor Request Failed**\n$errorMsg\n\n*Check your network connection and verify your Gemini API key in the Secrets panel.*",
+                    topicSubject = _selectedSubject.value?.name ?: "General Healthcare",
+                    timestampMillis = System.currentTimeMillis()
+                )
+                repository.saveChatMessage(errorBubble)
+            }
+
             _isAiThinking.value = false
         }
     }
 
     fun clearChat() {
+        val studentEmail = activeUserAccount.value?.email ?: ""
         viewModelScope.launch {
-            repository.clearChat()
+            repository.clearChatForUser(studentEmail)
         }
     }
 
@@ -471,15 +624,35 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // Student Authentication
+    // Student Authentication & Session Management
     fun loginStudent(email: String, pass: String, callback: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
             val result = repository.login(email, pass)
             result.onSuccess { account ->
-                // Update profile name and email
-                val currProfile = userProfile.value
-                if (currProfile != null) {
-                    repository.saveProfile(currProfile.copy(fullName = account.fullName, email = account.email))
+                // Ensure student profile exists
+                val existingProfile = repository.getProfileByEmail(account.email)
+                if (existingProfile == null) {
+                    val courseProg = SeedData.supportedCourses.find { it.id == account.courseId }
+                        ?: SeedData.supportedCourses.first()
+                    val newProfile = UserProfileEntity(
+                        id = account.email,
+                        fullName = account.fullName,
+                        email = account.email,
+                        educationLevel = "Undergraduate Healthcare",
+                        university = "State University of Health Sciences",
+                        courseId = account.courseId,
+                        courseName = courseProg.name,
+                        collegeName = account.collegeName,
+                        admissionBatch = "2024-2028 Batch",
+                        academicYear = "1st Year",
+                        semesterOrPhase = courseProg.semestersOrPhases.firstOrNull() ?: "Semester 1",
+                        curriculumVersion = "Accredited Standard Curriculum",
+                        preferredLanguage = "English",
+                        isOnboarded = false,
+                        studyStreakDays = 0,
+                        totalStudyMinutes = 0
+                    )
+                    repository.saveProfile(newProfile)
                 }
                 callback(true, null)
             }.onFailure { err ->
@@ -494,6 +667,11 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         fullName: String,
         collegeName: String,
         courseId: String,
+        educationLevel: String = "Undergraduate Healthcare",
+        university: String = "State University of Health Sciences",
+        academicYear: String = "1st Year",
+        semesterOrPhase: String = "Semester 1",
+        preferredLanguage: String = "English",
         callback: (Boolean, String?) -> Unit
     ) {
         viewModelScope.launch {
@@ -501,19 +679,22 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
             result.onSuccess { account ->
                 val courseProg = SeedData.supportedCourses.find { it.id == courseId } ?: SeedData.supportedCourses.first()
                 val newProfile = UserProfileEntity(
-                    fullName = fullName,
+                    id = account.email,
+                    fullName = fullName.trim(),
                     email = account.email,
+                    educationLevel = educationLevel,
+                    university = university,
                     courseId = courseId,
                     courseName = courseProg.name,
-                    university = "State University of Health Sciences",
-                    collegeName = collegeName,
+                    collegeName = collegeName.trim(),
                     admissionBatch = "2024-2028 Batch",
-                    academicYear = "1st Year",
-                    semesterOrPhase = courseProg.semestersOrPhases.firstOrNull() ?: "Semester 1",
-                    curriculumVersion = "Official Curriculum Standard",
+                    academicYear = academicYear,
+                    semesterOrPhase = semesterOrPhase,
+                    curriculumVersion = "Accredited Standard Curriculum",
+                    preferredLanguage = preferredLanguage,
                     isOnboarded = true,
-                    studyStreakDays = 1,
-                    totalStudyMinutes = 60
+                    studyStreakDays = 0,
+                    totalStudyMinutes = 0
                 )
                 repository.saveProfile(newProfile)
                 _selectedSemester.value = newProfile.semesterOrPhase
@@ -524,10 +705,23 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun logoutStudent() {
+    fun resetPassword(email: String, newPass: String, callback: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.resetPassword(email, newPass)
+            result.onSuccess {
+                callback(true, null)
+            }.onFailure { err ->
+                callback(false, err.message)
+            }
+        }
+    }
+
+    fun logoutStudent(onLoggedOut: () -> Unit = {}) {
         viewModelScope.launch {
             repository.logout()
+            _selectedSubject.value = null
             _currentScreen.value = Screen.Auth
+            onLoggedOut()
         }
     }
 
@@ -541,9 +735,11 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
         reflection: String,
         hours: Int
     ) {
+        val studentEmail = activeUserAccount.value?.email ?: ""
         viewModelScope.launch {
             repository.addWardLog(
                 ClinicalWardLogEntity(
+                    userEmail = studentEmail,
                     wardName = wardName,
                     postingDate = date,
                     patientCaseType = caseType,
@@ -560,13 +756,6 @@ class MedPrepViewModel(application: Application) : AndroidViewModel(application)
     fun deleteWardLog(log: ClinicalWardLogEntity) {
         viewModelScope.launch {
             repository.deleteWardLog(log)
-        }
-    }
-
-    // Note Updating
-    fun updatePersonalNote(note: PersonalNoteEntity) {
-        viewModelScope.launch {
-            repository.saveNote(note)
         }
     }
 

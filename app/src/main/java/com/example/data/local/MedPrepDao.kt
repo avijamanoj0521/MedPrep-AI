@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.Flow
 interface MedPrepDao {
 
     // User Profile
+    @Query("SELECT * FROM user_profiles WHERE email = :email LIMIT 1")
+    fun getProfileByEmailFlow(email: String): Flow<UserProfileEntity?>
+
+    @Query("SELECT * FROM user_profiles WHERE email = :email LIMIT 1")
+    suspend fun getProfileByEmail(email: String): UserProfileEntity?
+
     @Query("SELECT * FROM user_profiles WHERE id = 'default_student' LIMIT 1")
     fun getUserProfileFlow(): Flow<UserProfileEntity?>
 
@@ -60,6 +66,9 @@ interface MedPrepDao {
     @Query("SELECT * FROM study_sessions ORDER BY id DESC")
     fun getAllStudySessions(): Flow<List<StudySessionEntity>>
 
+    @Query("SELECT * FROM study_sessions WHERE userEmail = :email OR userEmail = '' ORDER BY id DESC")
+    fun getStudySessionsForUser(email: String): Flow<List<StudySessionEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertStudySession(session: StudySessionEntity)
 
@@ -72,6 +81,9 @@ interface MedPrepDao {
     // Notes
     @Query("SELECT * FROM personal_notes ORDER BY updatedAtMillis DESC")
     fun getAllNotes(): Flow<List<PersonalNoteEntity>>
+
+    @Query("SELECT * FROM personal_notes WHERE (userEmail = :email OR userEmail = '') ORDER BY updatedAtMillis DESC")
+    fun getNotesForUser(email: String): Flow<List<PersonalNoteEntity>>
 
     @Query("SELECT * FROM personal_notes WHERE courseId = :courseId ORDER BY updatedAtMillis DESC")
     fun getNotesForCourse(courseId: String): Flow<List<PersonalNoteEntity>>
@@ -92,6 +104,9 @@ interface MedPrepDao {
     @Query("SELECT * FROM quiz_questions WHERE courseId = :courseId AND subjectName = :subjectName")
     fun getQuestionsForSubject(courseId: String, subjectName: String): Flow<List<QuizQuestionEntity>>
 
+    @Query("SELECT * FROM quiz_questions ORDER BY id ASC")
+    fun getAllQuestions(): Flow<List<QuizQuestionEntity>>
+
     @Query("SELECT * FROM quiz_questions LIMIT :count")
     suspend fun getRandomQuestions(count: Int): List<QuizQuestionEntity>
 
@@ -101,6 +116,9 @@ interface MedPrepDao {
     // Quiz Attempts
     @Query("SELECT * FROM quiz_attempts ORDER BY completedAtMillis DESC")
     fun getAllQuizAttempts(): Flow<List<QuizAttemptEntity>>
+
+    @Query("SELECT * FROM quiz_attempts WHERE userEmail = :email OR userEmail = '' ORDER BY completedAtMillis DESC")
+    fun getQuizAttemptsForUser(email: String): Flow<List<QuizAttemptEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertQuizAttempt(attempt: QuizAttemptEntity)
@@ -118,6 +136,9 @@ interface MedPrepDao {
     // Nursing Care Plans
     @Query("SELECT * FROM nursing_care_plans ORDER BY createdAtMillis DESC")
     fun getAllCarePlans(): Flow<List<NursingCarePlanEntity>>
+
+    @Query("SELECT * FROM nursing_care_plans WHERE userEmail = :email OR userEmail = '' ORDER BY createdAtMillis DESC")
+    fun getCarePlansForUser(email: String): Flow<List<NursingCarePlanEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCarePlan(ncp: NursingCarePlanEntity)
@@ -145,8 +166,14 @@ interface MedPrepDao {
     @Query("SELECT * FROM ai_chat_messages ORDER BY timestampMillis ASC")
     fun getAllAiChatMessages(): Flow<List<AiChatMessageEntity>>
 
+    @Query("SELECT * FROM ai_chat_messages WHERE userEmail = :email OR userEmail = '' ORDER BY timestampMillis ASC")
+    fun getChatMessagesForUser(email: String): Flow<List<AiChatMessageEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertChatMessage(message: AiChatMessageEntity)
+
+    @Query("DELETE FROM ai_chat_messages WHERE userEmail = :email OR userEmail = ''")
+    suspend fun clearChatForUser(email: String)
 
     @Query("DELETE FROM ai_chat_messages")
     suspend fun clearChatHistory()
@@ -158,8 +185,14 @@ interface MedPrepDao {
     @Query("SELECT * FROM user_accounts WHERE isActiveSession = 1 LIMIT 1")
     fun getActiveUserAccountFlow(): Flow<UserAccountEntity?>
 
+    @Query("SELECT * FROM user_accounts WHERE isActiveSession = 1 LIMIT 1")
+    suspend fun getActiveUserAccount(): UserAccountEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUserAccount(account: UserAccountEntity)
+
+    @Query("UPDATE user_accounts SET passwordHash = :newPasswordHash WHERE email = :email")
+    suspend fun updatePassword(email: String, newPasswordHash: String)
 
     @Query("UPDATE user_accounts SET isActiveSession = 0")
     suspend fun logoutAllAccounts()
@@ -170,6 +203,9 @@ interface MedPrepDao {
     // Clinical Ward Logs
     @Query("SELECT * FROM clinical_ward_logs ORDER BY createdAtMillis DESC")
     fun getAllWardLogs(): Flow<List<ClinicalWardLogEntity>>
+
+    @Query("SELECT * FROM clinical_ward_logs WHERE userEmail = :email OR userEmail = '' ORDER BY createdAtMillis DESC")
+    fun getWardLogsForUser(email: String): Flow<List<ClinicalWardLogEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWardLog(log: ClinicalWardLogEntity)
